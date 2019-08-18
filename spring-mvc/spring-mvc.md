@@ -1481,12 +1481,42 @@ public class SampleControllerTest(){
 
 ### 10. Handler Method 2부: URI Pattern
 
+- URI 경로에서 값을 가져오는 것
+
 1. @PathVariable
 
    - 요청 URI 패턴의 일부를 Hanlder Method Argument로 받는 방법.
    - 타입 변환 지원
    - (기본)값이 반드시 있어야 한다.
    - Optional 지원
+
+   ```java
+   @Controller
+   public class SampleController{
+   	@GetMapping("/events/{id}")
+     @ResponseBody
+     public Event getEvent(@PathVariable Integer id){
+       Event event = new Event();
+       event.setId(id);
+       return event;
+     }
+     
+     //예시) required 적용법: 필수로 해당 값이 있어야 하는지 여부 판단
+     public Event getEvent(@PathVariable(required=false) Integer id){
+       Event event = new Event();
+       event.setId(id);
+       return event;
+     }
+     
+     //예시) Optional 사용 방법
+     public Event getEvent(@PathVariable Optional<Integer> id){
+       id.isEmpty()//다음과 같은 메소드로 값 확인 가능
+       Event event = new Event();
+       event.setId(id);
+       return event;
+     }  
+   }
+   ```
 
 2. @MatrixVariable
 
@@ -1506,11 +1536,27 @@ public class SampleControllerTest(){
        configurer.setUrlPathHelper(urlPathHelper);
      }
    }
+   
+   //@MatrixVariable적용
+   @GetMapping("/events/{id}")
+   @ResponseBody
+   public Event getEvent(@PathVariable Integer id, @MatrixVariable String name){
+     Event event = new Event();
+     event.setId(id);
+     return event;
+   }
+   
+   //Test 코드
+   mockMvc.perform(get("/events/1;name=keesun"))
    ```
 
+   ![matrix-variable](./img/matrix-variable.png)
 
 
-### 11. Handler Method 3부: @RequestMapping
+
+### 11. Handler Method 3부: @RequestParam
+
+- URL의 query 또는 form 데이터를 가져오는 것
 
 1. @RequestParam
    - 요청 매개변수에 들어있는 단순 타입 데이터를 Method Argument로 받아올 수 있다.
@@ -1519,15 +1565,49 @@ public class SampleControllerTest(){
    - String이 아닌 값들은 타입 컨버젼을 지원한다.
    - Map<String, String> 또는 MultiValuMap<String, String>에 사용해서 모든 요청 매개변수를 받아 올 수도 있다.
    - 이 어노테이션은 생략 가능하다.
-2. Request Arguments(요청 매개변수)란?
+2. RequestParam(요청 매개변수)란?
    - Query arguments
    - Form Data
+
+```java
+@Controller
+public class SampleController{
+  @PostMapping("/events/{id}?name=keesun")
+  @ResponseBody
+  public Event getEvnet(@RequestParam(required=false), defaultValue = "keesun") String name){
+    Event event = new Event();
+  	event.setId(id);
+  	event.setName(name);
+    return event;
+  }
+  
+	//예시) 기본
+  @PostMapping("/events/{id}?name=keesun")
+  @ResponseBody
+  public Event getEvnet(@RequestParam String name){
+    Event event = new Event();
+  	event.setId(id);
+  	event.setName(name);
+    return event;
+  }
+  
+  //참고로 @RequestParam은 생략해도 똑같이 동작함.
+  //예시) Map 으로 paramameter 받아오기(form 데이터 등)
+  @PostMapping("/events/{id}?name=keesun")
+  @ResponseBody
+  public Event getEvnet(@RequestParam Map<String, String> params){
+    Event event = new Event();
+  	event.setId(params.get("id");
+  	event.setName(params.get("name"));
+    return event;
+  }  
+                
+}
+```
 
 
 
 ### 12. Handler Method 4부: Form Submit(Thymleaf)
-
-
 
 1. Form을 보여줄 요청 처리
    - GET /evetns/form
@@ -1536,7 +1616,14 @@ public class SampleControllerTest(){
 2. Thymleaf
    - @{}: URL 표현식
    - ${}: variable 표현식
-   - *{}: selection 표현식
+   - *{}: selection 표현식(주입받은 Model 객체의 프라퍼티를 가져오는 역할)
+
+```html
+<form action="#" th:action="@{/events}" method="post" th:object="${event}">
+  <input type="text" title="name" th:field="*{name}"/>
+    <input type="text" title-"limit" th:field="*{limit}"/>
+</form>
+```
 
 
 
@@ -1553,13 +1640,39 @@ public class SampleControllerTest(){
 4. 바인딩 이후에 검증 작업을 추가로 하고 싶은 경우
    - @Valid 또는 @Validated 어노테이션을 사용한다.
 
+```java
+@PostMapping("/evetns/name/{name}")
+@ReponseBody
+public Event getEvent(@ModelAttribute Event event){ // Event 객체의 id, name, limit을 알아서 바인딩 해줌
+  return event;
+}
+
+//바인딩 중 데이터 타입이 달라 에러가 나는 경우
+@PostMapping("/evetns/name/{name}")
+@ReponseBody
+public Event getEvent(@ModelAttribute Event event, BindingResult bindingResult){ 
+  //error를 옆에 선언해줌 bindingResult에 주입해줌
+  if(bindingResult.hasErrors()){
+    System.out.println("error");    
+  }
+  return event;
+}
+
+```
+
 
 
 ### 14. Handler Method 6부: @Validated
 
 1. Spring MVC Handler Method Arguments에 사용할 수 있으며, Validation Group 이라는 Hint를 사용할 수 있다.
-2. @Valid는 그룹을 지정할 방법이 없다.
+2. @Valid는 그룹을 지정할 방법이 없다.(java 제공)
 3. @Validated는 Spring이 제공하는 어노테이션으로 그룹 클래스를 설정할 수 있다.
+
+```java
+//다음과 같이 선언하면, 검증을 진행한다.
+public Event getEvent(@Valid @ModelAttribute Event event, BindingResult bindingResult){} 
+public Event getEvent(@Validated(Event.ValidateName.class) @ModelAttribute Event event, BindingResult bindingResult){}
+```
 
 
 
@@ -1575,6 +1688,7 @@ public class SampleControllerTest(){
    - https://www.thymeleaf.org/doc/tutorials/2.1/thymeleafspring.html#field-errors
 
    ```html
+   <!-- BindingResult가 event객체에 바인딩 되서 전달되기 떄문에 아래와 같은 처리가 가능 -->
    <p th:if="${#fields.hasErrors("limit")}" th:erros="*{limit}">
      Incorrect data
    </p>
@@ -1584,6 +1698,16 @@ public class SampleControllerTest(){
 
    - https://en.wikipedia.org/wiki/Post/Redirect/Get
    - Post 이후에 브라우저를 refresh 하더라도 Form Submit이 발생하지 않도록 하는 패턴
+
+   ```java
+   @PostMapping("/events")
+   return "redirect:/events/list"
+     
+   @GetMapping("/events/list")
+   return "events/list"
+   ```
+
+   
 
 4. Thymleaf 목록 보여주기
 
@@ -1600,7 +1724,19 @@ public class SampleControllerTest(){
    </div>
    ```
 
-   
+```java
+@PostMapping("/evetns/name/{name}")
+@ReponseBody
+public Event getEvent(@ModelAttribute Event event, BindingResult bindingResult){ 
+  //error발생시 form화면 다시 보여주도록 설정
+  if(bindingResult.hasErrors()){
+    return "events/form"
+  }
+  return event;
+}
+```
+
+
 
 ### 16. Handler Method 8부: @SessionAttributes
 
@@ -1611,6 +1747,40 @@ public class SampleControllerTest(){
    - 여러 화면(또는 요청)에서 사용해야 하는 객체를 공유할 때 사용한다.
 2. SessionStatus를 사용해서 세션 처리 완료를 알려줄 수 있다.
    - Form 처리 끝나고 Session 비울 때 사용한다.
+   - HttpSession보다 추상화된 레벨에서 사용가능한다.
+
+```java
+@SessionAttributes("event")
+public class SampleController
+
+//Controller
+@GetMapping("/events/form")
+public String eventsForm(Model model, HttpSession httpSession){
+  Event newEvent = new Event();
+  newEvent.setLimit(50);
+  model.addAttribute("event", newEvent);
+  httpSession.setAttribute("event", newEvent);
+  return "/evetns/form"
+}
+
+@PostMapping("/evetns/name/{name}")
+@ReponseBody
+public Event getEvent(@ModelAttribute Event event, BindingResult bindingResult, SessionStatus sessionStatus){ 
+  //error발생시 form화면 다시 보여주도록 설정
+  if(bindingResult.hasErrors()){
+    return "events/form"
+  }
+  
+  return event;
+}
+
+//Test
+mockMvc...
+  	.andExpect(request().sessionAttribute("event", notNullValue))
+```
+
+3. Session 사용 예)
+   - 장바구니 등
 
 
 
@@ -1622,6 +1792,12 @@ public class SampleControllerTest(){
    - 위의 내용을 묶어 이벤트 목록으로 Submit 
 2. 완료된 경우에 Session에서 Model 객체 제거하기
    - SessionStatus
+
+```java
+form에서 넘긴 데이터가 Event 객체에 바인딩 되어 Session에 저장됨. 
+그래서, 다른 핸들러에서 새로운 form 데이터를 원래 있던 Event 객체에 추가 바인딩해서 사용하는 것이 가능하다.
+Session.setComplete()를 통해서 세션에 저장되어 있는 Event 객체를 더이상 사용할 필요가 없으면 세션을 비워준다.
+```
 
 
 
@@ -1639,13 +1815,330 @@ public class SampleControllerTest(){
 ### 19.  Handler Method 11부: RedirectAttributes
 
 1. Redirect할 때 기본적으로 Model에 들어있는 primitive type 데이터는 URI 쿼리 매개변수에 추가된다.
+
    - Spring Boot에서는 이 기능이 기본적으로 비활성화 되어 있다.
    - Ignore-default-model-on-redirect 프로퍼티를 사용해서 활성화 할 수 있다.
+
+   ```
+   //application.properties
+   spring.mvc.ignore-default-model-on-redirect=false
+   ```
+
 2. 원하는 값만 Redirect할 때 전달하고 싶으면 RedirectAttributes에 명시적으로 추가할 수 있다.
+
+   ```java
+   @PostMapping("/events/form/limit")
+   public String eventsFormLimitSubmit(@Validated @ModelAttribute Event event,
+                                      ...
+                                      ,RedirectAttributes attributes){
+     attributes.addAtrribute("name",event.getName());
+     attributes.addAtrribute("limit",event.getLimit());
+     return "redirectL/events/list"
+   }
+   ```
+
 3. Redirect 요청을 처리하는 곳에서 query arguments를 @RequestParam 또는 @ModelAttribute로 받을 수 있다.
+
+```java
+//@ModelAttribute로 받을 때 주의할점: @SessionAttributes를 선언한 컨트롤러인 경우 이름이 동일하면, 먼저 세션에서 찾는다. 그런데, sessionStatus.setComplete()로 세션을 비운상태라면, 해당 객체를 찾아올 수 없어 에러가 발생한다. 그러므로, ModelAttribute에 새로운 이름으로 객체를 주입받을 수 있도록 하자.
+public String getEvents(@ModelAttribute("newEvent") Event event)
+```
 
 
 
 ### 20. Handler Method 12부: Flash Attributes
 
- 
+1. 주로 redirect에 데이터를 전달할 때 사용한다.
+   - 데이터가 URI에 노출되지 않는다.
+   - 임의의 객체를 저장할 수 있다.
+   - 보통 HTTP Session을 사용한다.
+2. redirect 하기 전에 데이터를 HTTP Session에 저장하고 redirect 요청을 처리 한 다음, 그 즉시 제거한다.(**1회성이다!**)
+3. RedirectAttributes를 통해 사용할 수 있다.
+4. XPath: mockMvc로 테스트할때 사용
+   - https://www.w3schools.com/xml/xpath_syntax.asp
+   - https://www.freeformatter.com/xpath-tester.html#ad-output
+
+```java
+@PostMapping("/events/form/limit")
+public String eventsFormLimitSubmit(@Validated @ModelAttribute Event event,
+                                   ...
+                                   ,RedirectAttributes attributes){
+  attributes.addFlashAttribute("newEvent",event); // redirect할때 Flash(1회성)으로 객체를 주입해줌(세션에 넣어두고, 사용되는 핸들러에서 바로 제거됨)
+  return "redirectL/events/list"
+}
+
+@GetMapping("/events/list")
+											  //이 event 객체에 주입됨! 
+												//또한, Model에 바로 주입되기 떄문에, 사실상 @ModelAttribute 필요없음
+public String getEvents(@ModelAttribute("newEvent") Event event, Model model, @SessionAttribute LocalDateTime visitTime){
+	Event newEvent = model.asMap().get("newEvent");
+}
+```
+
+
+
+### 21. Handler Method 13부: MultipartFile
+
+1. MultipartFile
+   - 파일 업로드시 사용하는 method argument
+   - MutipartResolver Bean이 설정 되어 있어야 사용할 수 있다.(Spring boot는 자동 설정 해줌)
+   - POST multipart/form-data 요청에 들어있는 파일을 참조할 수 있다.
+   - List<MultipartFile> 아규먼트로 여러 파일을 참조할 수 있다.
+2. 파일 업로드 form
+
+```xml
+<form method="POST" enctype="multipart/form-data" action="#" th:action="@{/file}">
+	File: <input type="file" name="file"/>
+  <input type="submit" value="Upload"/>
+</form>
+```
+
+3. 파일 업로드 처리 Handler
+
+```java
+@PostMapping("/file")
+public String uploadFile(@RequestParam MultipartFile file, RedirectAttributes attributes){
+  //여기서 사실상 받은 파일은 저장하는 코드가 들어가야함!
+  String message = file.getOriginalFilename() + "is uploaded";
+  System.out.println(message);
+  attributes.addFlashAttribute("message", message);
+  return "redirect:/events/list";
+}
+```
+
+6. 메시지 출력
+
+```html
+<div th:if="${message}">
+  <h2 th:text="${message}"/>
+</div>
+```
+
+7. File Upload 관련 Spring Boot 설정
+   - MultipartAutoConfiguration
+   - MultipartProperties
+
+8. Test
+
+```java
+MockMultipartFile file = new MockMultipartFile
+  "file", "test.txt", "text/plain", "hello file".getBytes()
+);
+
+this.mockMvc.perform(multipart("/file"));
+```
+
+
+
+### 22. Handler Method 14부: ResoponseEntity, 파일 다운로드
+
+1. File Resource 읽어오는 방법
+
+   - Spring ResourceLoader 사용하기
+
+2. File Download Response Header에 설정할 내용
+
+   - Content-Disposition: 사용자가 해당 파일을 받을 때 사용할 파일 이름
+   - Content-Type: 어떤 파일인가
+   - Content-Length: 얼마나 큰 파일인가
+
+3. 파일의 종류(미디어 타입) 알아내는 방법
+
+   - http://tika.apache.org/
+
+4. ResponseEntity
+
+   - Response Status Code
+   - Response Header
+   - Response Body
+
+   ```java
+   @Autowired
+   private ResourceLoader = resourceLoader; // spirng core: 리소스 가져오는 기능
+   
+   @GetMapping("/file/{filename}")
+   public ResponseEntity<Resource> downloadFile(@PathVariable String filename) throws IOException {
+       Resource resource = resourceLoader.getResource("classpath:" + filename); // 파일 읽어 오기
+       File file = resource.getFile();
+   
+   	  Tika tika = new Tika(); // 파일의 Content-Type을 알려줌( ex. attachments; fileName="test.txt")
+       String type = tika.detect(file);
+       return ResponseEntity.ok() // ok: 200응답
+               .header(HttpHeaders.CONTENT_DISPOSITION, "attachement; filename=\"" + resource.getFilename() + "\"") //  header에 응답할 리소스 설정
+               .header(HttpHeaders.CONTENT_TYPE, type) // header content-type 설정
+               .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(file.length())) // header 파일 크기 설정 
+               .body(resource);
+   }
+   
+   ```
+
+   
+
+### 23. Handler Method 15부: @RequestBody & HttpEntity
+
+1. @RequestBody
+   - 요청 본문(Body)에 들어있는 데이터를 HttpMessageConverter를 통해 변환한 객체로 받아올 수 있다.
+   - @Valid 또는 @Validated를 사용해서 값을 검증 할 수 있다.
+   - BindingResult Argument를 사용해 코드로 바인딩 또는 검증 에러를 확인할 수 있다.
+2. HttpMessageConverter
+   - Spring MVC 설정(WebMvcConfigurer)에서 설정할 수 있다.
+   - configureMessageConverters: 기본 메시지 컨버터 대체
+   - extendMessageConverters: 메시지 컨버터에 추가
+   - 기본 컨터버
+     - WebMvcConfigurationSupport.addDefaultHttpMessageConverters
+3. HttpEntity
+   - @RequestBody와 비슷하지만 추가적으로 요청 헤더 정보를 사용할 수 있다.
+
+```java
+@PostMapping
+public Event createEvnet(@RequestBody @Valid Event event, BindingResult bindResult){
+  //save event;
+  return event;
+}
+
+@PostMapping
+public Event createEvnet(HttpEntitiyL<Event> request){
+	MediaType contentType = request.getHeaders().getContentTpye();
+  return request.getBody();
+}
+```
+
+
+
+### 24. Handler Method 16부: @ResponseBody & ResponseEntity
+
+1. @ResponseBody
+   - 데이터를 HttpMessageConverter를 사용해 응답 보문 메시지로 보낼 때 사용한다.
+   - @RestController 사용시 자동으로 모든 핸들러 메소드에 적용 된다.
+2. ResponseEntity
+   - 응답 헤더 상태 코드 본문을 직접 다루고 싶은 경우에 사용한다.
+   - BindResult를 통한 에러처리도 가능
+
+
+
+### 25. Handler Method 17부: 정리
+
+1. 다루지 못한 내용
+   - @JsonView: https://www.youtube.com/watch?v=5QyXswB_Usg&t=188s
+   - PushBuilder: HTTP/2, Spring 5
+
+
+
+### 26. 모델: @ModelAttribute 또 다른 사용법
+
+- @RequestMapping을 사용한 핸들러 메소드의 아규먼트에 사용하기
+
+- @Controller 또는 @ControllerAdvice를 사용한 클래스에서 모델 정보를 초기화 할 때 사용한다.
+
+- @RequestMapping과 같이 사용하면 해당 메소드에서 리턴하는 객체를 모델에 넣어 준다.
+
+  - RequestToViewNameTranslator
+
+  ```java
+  //이렇게하면 리턴하는 객체를 Model에 넣어줌
+  @GetMapping("/events/form/name")
+  @ModelAttribute
+  public Event eventsForName(){
+    return new Event();
+  }
+  ```
+
+  
+
+- @ModelAttribute method
+
+```java
+//두가지 방법있음
+
+//이렇게 하면 subject라는 모델을 제공하는 것
+@ModelAttribute
+  public void subjects(Model model) {
+      model.addAttribute("subjects", List.of("study", "seminar", "hobby", "social"));
+  }
+
+//이렇게 하면, categories라는 모델을 제공하는 것
+@ModelAttribute("categories")
+public List<String> categories(Model model) {
+   return List.of("subjects", List.of("study", "seminar", "hobby", "social"));
+}
+```
+
+
+
+### 27. DataBinder: @InitBinder
+
+1. 특정 컨트롤러에서 바인딩 또는 검증 설정을 변경하고 싶을 때 사용
+
+   ```java
+   @InitBinder
+   public void initEventBinder(WebDataBinder webDataBinder) {
+       webDataBinder.setDisallowedFields("id"); // id 값이 바인딩 되는 것을 방지해줌
+     	webDataBinder.addValidators(new EventValidator());
+   }
+   
+   ```
+
+2. Binding 설정
+
+   - webDataBinder.setDisallowedFileds();
+
+3. Formatter 설정
+
+   - webDataBinder.addCustomFormatter();
+
+4. Validator 설정
+
+   - webDataBinder.addValidators();
+
+5. 특정 모델 객체에만 바인딩 또는 Validator 설정을 적용하고 싶은 경우
+
+   - @InitBinder("event")
+
+6. 참고
+
+   - https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-initbinder
+   - https://github.com/spring-projects/spring-petclinic/blob/master/src/main/java/org/springframework/samples/petclinic/owner/PetController.java
+
+
+
+### 28. 예외 처리 핸들러: @ExceptionHandler
+
+1. 특정 예외가 발생한 요청을 처리하는 핸들러 정의
+   - 지원하는 메소드 아규먼트(해당 예외 객체, 핸들러 객체, ...)
+   - 지원하는 리턴값
+   - REST API의 경우 응답 본문에 에러에 대한 정보를 담아주고, 상태 코드를 설정하려면 ResponseEntity를 주로 사용한다.
+
+```java
+@ExceptionHandler
+public String eventErrorHandler(EventException exception, Model model){
+  model.addAttribute("message", "event error");
+  return "error"
+}
+```
+
+
+
+### 29. 전역 컨트롤러: @(Rest)ControllerAdivce
+
+1. 예외 처리, 바인딩 설정, 모델 객체를 모든 컨트롤러 전반에 걸쳐 적용하고 싶은 경우에 사용한다.
+   - @ExceptionHandler
+   - @InitBinder
+   - @ModelAttributes
+2. 적용할 범위를 지정할 수 도 있다.
+   - 특정 어노테이션을 가지고 있는 컨트롤러에만 적용하기
+   - 특정 패키지 이하의 컨트롤러에만 적용하기
+   - 특정 클래스 타입에만 적용하기
+
+![global-controller](./img/global-controller.png)
+
+
+
+### 30. Spring MVC 강좌 마무리
+
+1. 살펴보지 못한 내용
+   - 비동기 요청 처리
+   - CORS 설정
+   - HTTP/2
+   - 웹 소켓
+   - 웹 플러스
+   - ...
