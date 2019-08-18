@@ -1012,3 +1012,640 @@ public void jsonMessage() throws Exception{
    - Spring Boot를 사용하는 경우는 application.properties 부터 시작
    - WebMvcConfigurer로 시작
    - @Bean으로 MVC 구성 요소 직접 등록
+
+
+
+## 3부. Spring MVC 활용
+
+
+
+### 1. Spring MVC 핵심 기술 소개
+
+1. Annotation 기반의 Spring MVC 
+   - Request Mapping 하기
+   - Handler Method
+   - ModelAndView
+   - Data Binder
+   - Error Handling
+   - Global Controller
+2. 사용할 기술
+   - Spring Boot
+   - Spring Framework Web MVC
+   - Thymleaf
+3. 학습할 Annotation
+   - @RequestMapping
+     - @GetMapping
+     - @PostMapping
+     - @PutMapping
+   - @ModelAttribute
+   - @RequestParam, @RequestHeader
+   - @PathVariable, @MatrixVariable
+   - @SessionAttribute, @RequestAttribute, @CookieValue
+   - @Valid
+   - @RequestBody, @ResponseBody
+   - @ExceptionHandler
+   - @ControllerAdvice
+4. [참고자료](https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-controller)
+
+### 2. HTTP Request Mapping 1부: Request Method
+
+1. HTTP Method
+   - GET, POST, PUT, PATCH, DELETE, ...
+2. GET 요청
+   - 클라이언트가 서버의 리소스를 요청할 때 사용한다.
+   - 캐싱 할 수 있따.(조건적인 GET으로 바뀔 수 있다.)
+   - 브라우저 기록에 남는다.
+   - 북마크 할 수 있다.
+   - 민감한 데이터를 보낼 때 사용하지 말 것.(URL에 다 보이니까)
+   - idempotent(동일한 요청에 동일한 응답을 해야한다.)
+3. POST 요청
+   - 클라이언트가 서버의 리소스를 수정하거나 새로 만들 때 사용한다.
+   - 서버에 보내는 데이터를 POST 요청 본문에 담는다.
+   - 캐시할 수 없다.
+   - 브라우저 기록에 남지 않는다.
+   - 북마크 할 수 없다.
+   - 데이터 길이 제한이 없다.
+4. PUT 요청
+   - URI에 해당하는 데이터를 새로 만들거나 수정할 때 사용한다.
+   - POST와 다른 점은 "URI"에 대한 의미가 다르다.
+     - POST의 URI는 보내는 데이터를 처리할 리소스를 지칭한다.
+     - PUT의 URL는 보내는 데이터에 해당하는 리소스를 지칭한다.
+   - PATCH와 다르게 해당 데이터 전체 내용을 업데이트함
+   - Idempotent
+5. PATCH 요청
+   - 데이터의 일부만 추가/변경하고 싶은 경우
+   - PUT과 비슷하지만, 기존 엔티티와 새 데이터의 차이점만 보낸다는 차이가 있다.
+   - Idempotent
+6. DELETE 요청
+   - URL에 해당하는 리소스를 삭제할 때 사용한다.
+   - Idempotent
+7. Spring Web MVC에서 HTTP method mapping하기
+   - @RequestMapping(method=RequestMethod.GET)
+   - @RequestMapping(method={RequestMethod.GET, RequestMethod.POST})
+   - @GetMapping, @PostMapping, … 
+
+```java
+@Controller
+//만약 @RequestMapping(method=RequestMethod.GET) 을 클래스 레벨에 설정한 경우 이하 모든 메서드는 GET 요청만 처리
+public class SampleController{
+  @RequestMapping(value="/hello", method={RequestMethod.GET, RequestMethod.PUT}) // method에 들어가 있는 요청들만 Allow 됨.
+  @ResponseBody
+  public String hello(){
+    return "hello";
+  }
+  
+}
+```
+
+```java
+//RunWith은 Junit Annotation
+//SpringRunner.class는 Spring이 Junit을 돌리기 위해 제공하는 클래스-> 내부적으로 ApplicationContext 제공
+@RunWith(SpringRunner.class) 
+@WebMvcTest //web을 테스트하기 위한 것들 제공
+public class SampleControllerTest(){
+  @Autowired
+  MockMvc mockMvc;
+  
+  @Test
+  public void helloTest(){
+    mocMvc.perfor(get("/hello"))
+      .andDo(pring()) //요청, 응답등에 관련된 내용을 logging해줌
+      .andExpect(status().isOk()) 
+      .andExpect(content().string("hello"))
+  }
+  
+  @Test
+  public void helloTest(){
+    mocMvc.perfor(post("/hello"))
+      .andDo(pring()) //요청, 응답등에 관련된 내용을 logging해줌
+      .andExpect(status().isMethodNotAllowed()); // 403 NOT ALLOWED 에러
+  }  
+}
+```
+
+### 3. HTTP Request Mapping 2부: URI Pattern Mapping
+
+1. URI, URL, URN 구분
+   
+   - [참고자료](https://stackoverflow.com/questions/176264/what-is-the-difference-between-a-uri-a-url-and-a-urn
+   
+2. Request Identifier로 Mapping
+   - @RequestMapping은 다음의 패턴을 지원한다.
+   - ?: 한 글자("/author/???"=> "/author/123")
+   - *: 여러 글자("/author/ *"=>"/author/keesun")
+   - **: 여러 패스("/author/ * *"=>"/author/keesun/book")
+   
+3. Class에 선언한 @RequestMapping과 조합
+   
+   - Class에 선언한 URL Pattern 뒤에 이어 붙여서 Mapping 한다.
+   
+   ```java
+   @Controller
+   public class SampleController{
+   
+     @GetMapping({"hello", "hi"}) // hello, hi 두가지 요청을 모두 처리함
+     @ResponseBody
+     public String hello(){
+       return "hello";
+     }
+     
+   }
+   ```
+   
+4. 정규 표현식으로 Mapping할 수도 있다.
+   
+   - /{name:정규식}
+   
+   ```java
+   @Controller
+   @RequestMapping("/hello")
+   public class SampleController{
+   
+     @RequestMapping("/{name:[a-z]+}")
+     @ResponseBody
+     public String helloKeesun(@PathVariable String name){
+       return "hello " + name;
+     }
+     
+   }
+   ```
+   
+5. Pattern이 중복되는 경우에는?
+
+   - 가장 구체적으로 Mapping되는 Handler를 선택한다.
+
+   ```java
+   @Controller
+   @RequestMapping("/hello")
+   public class SampleController{
+   
+     //여기가 가장 구체적으로 Mapping도기 때문에, 이 핸들러가 사용됨
+     @RequestMapping("/keesun")
+     @ResponseBody
+     public String helloKeesun(){
+       return "hello keesun";
+     }
+     
+     @RequestMapping("/**")
+     @ResponseBody
+     public String helloKeesun(){
+       return "hello";
+     }  
+     
+   }
+   ```
+
+6. URI 확장자 Mapping 지원
+
+   - 이 기능은 권장하지 않는다.(Spring Boot에서는 기본으로 이 설정을 제한함)
+   - 보안 이슈(RFD Attack)
+   - URI 변수, Path 매개변수, URI 인코딩을 사용할 때 불명확함.
+   - 요즘 트렌드는 확장자패턴(index.html) 보다는, Header정보 Contetn-Type등을 이용해 내가 원하는 파일의 정보를 알린다.(JSON, HTML ...)
+
+   ```java
+   @RequestMapping("/keesun") // 이렇게 사용하는 경우, /keesun.*(jsp, html ...)으로 요청이 들어와도 맵핑해줌
+   ```
+
+7. RFD Attack
+
+### 4. HTTP Request Mapping 3부: Media Type Mapping
+
+1. 특정한 타입의 데이터를 담고 있는 요청만 처리하는 핸들러
+
+   - @RequestMapping(consumes=MediaType.APPLICATION_JSON_UTF8_VALUE)
+   - Content-Type Header로 필터링
+   - 매치 되지 않는 경우에 415 Unsupported Media Type 응답
+   - **consumes/produces는 클래스 level에 선언 가능하지만, 메소드에서 다시 선언하면 오버라이딩 되서 메소드에 설정한 것만 적용됨**
+
+   ```java
+   public class SampleControllerTest{
+   	@RequestMapping(
+       value = "/hello", 
+       consumes = MediaType.APPLICATION_JSON_UTF8_VALUE,
+       produces = MediaType.TEXT_PLAIN_VALUE // Response 타입 지정
+     )
+     @ResponseBody
+     public String hello(){
+       return "hello";
+     }
+   }
+   ```
+
+   ```java
+   @RunWith(SpringRunner.class) 
+   @WebMvcTest 
+   public class SampleControllerTest(){
+     @Autowired
+     MockMvc mockMvc;
+     
+     @Test
+     public void helloTest() throws Exception{
+       mocMvc.perfor(
+         get("/hello")
+         .contentType(MediaType.APPLICATION_JSON)
+         .accept(MediaType.APPLICATION_JSON) //Accept 헤더에 JSON이 추가됨
+       ) .andDo(pring()) 
+         .andExpect(status().isMethodNotAllowed()); // 403 NOT ALLOWED 에러
+     }  
+   }
+   ```
+
+2. 특정한 타입의 응답을 만드는 핸들러
+   - @RequestMapping(produces="application/json")
+   - Accept Header로 필터링
+   - 매치 되지 않는 경우에 406 Not Acceptable 응답
+
+3. 문자열을 입력하는 대신 MediaType을 사용하면 상수를 자동 완성으로 사용할 수 있다.
+
+4. 클래스에 선언한 @RequestMapping에 사용한 것과 조합이 되지 않고, 메소드에 사용한 @RequestMapping의 설정으로 덮어쓴다.
+
+5. Not(!)을 사용해서 특정 미디어 타입이 아닌 경우로도 Mapping 할 수 있다.
+
+
+
+### 5. HTTP Request Mapping 4부: Header와 매개변수
+
+1. 특정한 Header가 있는 요청을 처리하고 싶은 경우
+   - @RequestMapping(headers="key")
+2. 특정한 Header가 없는 요청을 처리하고 싶은 경우
+   - @RequestMapping(headers="!key")
+3. 특정한 Header가 키/값이 있는 요청을 처리하고 싶은 경우
+   - @RequestMapping(headers="key=value")
+4. 특정한 요청 매개변수 키를 가지고 있는 요청을 처리하고 싶은 경우
+   - @RequestMapping(params="a")
+5. 특정한 요청 매개변수가 없는 요청을 처리하고 싶은 경우
+   - @RequestMapping(params="!a")
+6. 특정한 요청 매개변수 키/값을 갖고 있는 요청을 처리하고 싶은 경우
+   - @RequestMapping(params="a=b")
+
+```java
+public class SampleControllerTest{
+	@RequestMapping(value = "/hello", headers = "!" + HttpHeaders.FROM)
+  @ResponseBody
+  public String hello(){
+    return "hello";
+  }
+}
+```
+
+```java
+@RunWith(SpringRunner.class) 
+@WebMvcTest 
+public class SampleControllerTest(){
+  @Autowired
+  MockMvc mockMvc;
+  
+  @Test
+  public void helloTest() throws Exception{
+    mocMvc.perform(get("/hello"))
+    	.header(HttpHeaders.AUTHORIZATION, "111")
+      .andDo(pring()) 
+      .andExpect(status().isOK());
+  }  
+}
+```
+
+
+
+### 6. HTTP Request Mapping 5부: HEAD와 OPTIONS 요청 처리
+
+1. 우리가 구현하지 않아도 Spring Web MVC에서 자동으로 처리하는 HTTP Method
+
+   - HEAD
+   - OPTIONS
+
+2. HEAD
+
+   - GET 요청과 동일하지만, 응답 본문(body)을 받아오지 않고 응답 헤더만 받아온다.
+
+   ```java
+    mocMvc.perfor(head("/hello")) //header 정보만 보냄
+         .andDo(pring()) 
+         .andExpect(status().isOK());
+   ```
+
+3. OPTIONS
+
+   - 사용할 수 있는 HTTP Method 제공
+   - 서버 또는 특정 리소스가 제공하는 기능을 확인할 수 있다.
+   - 서버는  Allow 응답 헤더에 사용할 수 있는 HTTP Method 목록을 제공해야 한다.
+
+   ```java
+    mocMvc.perfor(options("/hello")) //header 정보에 [Allow:"GET,HEAD,POST,OPTIONS"]를 제공, 스프링이 알아서 해줌
+         .andDo(pring()) 
+         .andExpect(status().isOK());
+   ```
+
+4. 참고자료
+
+   - https://www.w3.org/Protocols/rfc2616/rfc2616-sec9.html
+   - https://github.com/spring-projects/spring-framework/blob/master/spring-test/src/test/java/org/springframework/test/web/servlet/samples/standalone/resultmatchers/HeaderAssertionTests.java
+
+
+
+### 7. HTTP Request Mapping 6부: Custom Annotation
+
+1. @RequestMapping 어노테이션을 Meta 어노테이션으로 사용하기
+
+   - @GetMapping 같은 커스텀한 어노테이션을 만들 수 있다.
+
+2. Meta 어노테이션
+
+   - 어노테이션에 사용할 수 있는 어노테이션
+   - Spring이 제공하는 대부분의 어노테이션은 메타 어노테이션으로 사용할 수 있다.
+   - https://docs.spring.io/spring/docs/current/spring-framework-reference/core.html#beans-meta-annotations
+   - https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/core/annotation/AliasFor.html
+
+3. Composed(조합) 어노테이션
+
+   - 한개 혹은 여러 메타 어노테이션을 조합해서 만든 어노테이션
+   - 코드를 간결하게 줄일 수 있따.
+   - 보다 구체적인 의미를 부여할 수 있다.
+
+4. @Retention
+
+   - 해당 어노테이션 정보를 언제까지 유지할 것인가에 대한 설정
+   - Source
+     - 소스코드까지만 유지
+     - 즉, 컴파일하면 해당 어노테이션 정보는 사라진다
+   - Class(Default)
+     - 컴파일한 .class 파일에도 유지
+     - 즉, 런타임시, 클래스를 메모리로 읽어오면 해당 정보는 사라진다.
+   - Runtime
+     - 클래스를 메모리에 읽어왔을 때까지 유지
+     - 코드에서 이 정보를 바탕으로 특정 로직을 실행할 수 있다.
+
+   ```java
+   @Retention(RetentionPolicy.Runtime)
+   @RequestMapping(method = RequestMethod.GET, value="/hello")
+   public @interface GetHelloMapping{
+     
+   }
+   ```
+
+   ```java
+   @Controller
+   public class SampleController{
+     @GetHelloMapping
+     @ResponseBody
+     public String hello(){ return "hello"; }
+   }
+   ```
+
+5. @Target
+
+   - 해당 어노테이션을 어디에 사용할 수 있는지 결정한다.
+
+   ```java
+   @Target(ElementType.METHOD)
+   ```
+
+6. @Documented
+
+   - 해당 어노테이션을 사용한 코드의 문서에 그 어노테이션에 대한 정보를 표기할지 결정한다.
+
+   ```java
+   @Documented //javaDoc에 사용한 어노테이션에 대한 정보도 남긴다.
+   ```
+
+   
+
+### 8. HTTP Request Mapping 7부: Mapping 연습 문제
+
+1. GET/events
+
+2. GET/events1, GET/events2, GET/events3
+
+   ```java
+   @GetMapping("/events/{id}")
+   @ResponseBody
+   public String getAnEvents(@PathVariable int id){ //인자 id를 다른 이름으로 하고 싶은 경우,
+     																							 //@Pathvariable("id") int idValue
+   }
+   ```
+
+3. POST /events CONTENT-TYPE: application/json ACCEPT:application/json
+
+4. DELETE/events/1, DELETE/events/2, DELETE/events/3
+
+5. PUT /events/1 CONTENT-TYPE: application/json ACCEPT:application/json
+
+6. PUT /events/2 CONTENT-TYPE: application/json ACCEPT:application/json
+
+
+
+### 9. Handler Method 1부: Arugument와 Retrun Type
+
+1. Handler Method Argument: 주로 요청 그 자체 또는 요청에 들어있는 정보를 받아오는데 사용함
+
+- **WebRequestNativeWebRequestServletRequest/Response: Spring이 제공하는 요청, 응답 자체에 접근 가능한 API**
+- HttpServletRequest, HttpServletResponse: Servlet이 제공하는 요청, 응답 자체에 접근 가능한 API
+- InputStream: Java가 제공하는 요청 본문을 읽어올때 사용할 수 있는 API
+- Reader: Java가 제공하는 요청 본문을 읽어올때 사용할 수 있는 API
+- OutputStream: Java가 제공하는 응답 본문을 쓸때 사용할 수 있는 API
+- Writer: Java가 제공하는 응답 본문을 쓸때 사용할 수 있는 API
+- **PushBuider: Spirng 5, HTTP/2 Resource push에 사용**
+- HttpMethod: GET, POST, … 등에 대한 정보
+- Locale, TimeZone, ZoneId: LocalreResolver가 분석한 요청의 정보
+- @PathVaribale: URI 템플릿 변수 읽을 때 사용
+- @MatrixVariable: URI 경로 중에 키/값 쌍을 읽어 올 때 사용
+- @RequestParam: Servlet 요청 매개변수 값을 선언한 메소드 Argument Type으로 변환해준다.
+- @RequestHeader: 요청 header값을 선언한 메소드 Argument Type으로 변환해준다.
+- @RequestBody
+
+
+
+2. Handler Method Return: 주로 응답 또는 Model을 렌더링할 View에 대한 정보를 제공하는데 사용한다.
+
+- @ResponseBody: return 값을 HttpMessageConverter를 사용해 응답 본문으로 사용한다.
+
+- **HttpEntityResponseEntitiy: 응답 본문 뿐 아니라 header 정보까지, 전체 응답을 만들 때 사용한다.**
+
+  ```java
+  public ResponseEntity<String> events(){
+    ResponseEntity<Object> build = ResponseEntity.ok().build();
+    // header, body, status code 등 API를 제대로 만들때 유용함
+    return "event"
+  }
+  ```
+
+- String: ViewResolver를 사용해서 View를 찾을 때 사용할 View 이름
+
+- View: 암묵적인 Model 정보를 Rendering할 view instance
+
+- Map, Model: (RequestToViewNameTranslator를 통해서) 암묵적으로 판단한 View Rendering 할 때 사용할 모델 정보
+
+- @ModelAttribute: (RequestToViewNameTranslator를 통해서) 암묵적으로 판단한 View Rendering 할 때 사용할 모델 정보에 추가한다. 이 어노테이션은 생략가능
+
+
+
+### 10. Handler Method 2부: URI Pattern
+
+1. @PathVariable
+
+   - 요청 URI 패턴의 일부를 Hanlder Method Argument로 받는 방법.
+   - 타입 변환 지원
+   - (기본)값이 반드시 있어야 한다.
+   - Optional 지원
+
+2. @MatrixVariable
+
+   - 요청 URI 패턴에서 키/값 쌍의 데이터를 Method Argument로 받는 방법
+   - 타입 변환 지원
+   - (기본)값이 반드시 있어야 한다.
+   - Optional 지원
+   - 이 기능은 기본적으로 비활성화 되어 있음. 활성화 화려면 아래와 같이 설정해야함
+
+   ```java
+   @Configuration
+   public class WebConfig implements WebMvcConfigurer{
+     @Override
+     public void configurePathMatch(PathMatchConfigurer configurer){
+       UrlPathHelper urlPathHelper = new UrlPathHelper();
+       urlPathHelper.setRemoveSemicolonContent(false);
+       configurer.setUrlPathHelper(urlPathHelper);
+     }
+   }
+   ```
+
+
+
+### 11. Handler Method 3부: @RequestMapping
+
+1. @RequestParam
+   - 요청 매개변수에 들어있는 단순 타입 데이터를 Method Argument로 받아올 수 있다.
+   - 값이 반드시 있어야 한다.
+     - required = false 또는 Optional을 사용해서 부가적인 값으로 설정할 수도 있다.
+   - String이 아닌 값들은 타입 컨버젼을 지원한다.
+   - Map<String, String> 또는 MultiValuMap<String, String>에 사용해서 모든 요청 매개변수를 받아 올 수도 있다.
+   - 이 어노테이션은 생략 가능하다.
+2. Request Arguments(요청 매개변수)란?
+   - Query arguments
+   - Form Data
+
+
+
+### 12. Handler Method 4부: Form Submit(Thymleaf)
+
+
+
+1. Form을 보여줄 요청 처리
+   - GET /evetns/form
+   - View: events/form.html
+   - Model: "event", new Event()
+2. Thymleaf
+   - @{}: URL 표현식
+   - ${}: variable 표현식
+   - *{}: selection 표현식
+
+
+
+### 13. Handler Method 5부: @ModelAttribute
+
+1. @ModelAttribute
+   - 여러 곳에 있는 단순 타입 데이터를 복합 타입 객체로 받아오거나 해당 객체를 새로 만들 때 사용할 수 있다.
+   - 여러곳? URI Path, Request Arguments, Session 등
+   - 생략 가능
+2. 값을 바인딩 할 수 없는 경우에는?
+   - BindException 발생 400 Error 처리
+3. 바인딩 에러를 직접 다루고 싶은 경우
+   - BindingResult 타입의 Arguments를 바로 오른쪽에 추가한다.
+4. 바인딩 이후에 검증 작업을 추가로 하고 싶은 경우
+   - @Valid 또는 @Validated 어노테이션을 사용한다.
+
+
+
+### 14. Handler Method 6부: @Validated
+
+1. Spring MVC Handler Method Arguments에 사용할 수 있으며, Validation Group 이라는 Hint를 사용할 수 있다.
+2. @Valid는 그룹을 지정할 방법이 없다.
+3. @Validated는 Spring이 제공하는 어노테이션으로 그룹 클래스를 설정할 수 있다.
+
+
+
+### 15. Handler Method 7부: Form Submit(Error Handling)
+
+1. 바인딩 에러 발생 시 Model에 담기는 정보
+
+   - Event
+   - BindingResult.event
+
+2. Thymleaf 사용시 바인딩 에러 보여주기
+
+   - https://www.thymeleaf.org/doc/tutorials/2.1/thymeleafspring.html#field-errors
+
+   ```html
+   <p th:if="${#fields.hasErrors("limit")}" th:erros="*{limit}">
+     Incorrect data
+   </p>
+   ```
+
+3. Post/Redirect/Get 패턴
+
+   - https://en.wikipedia.org/wiki/Post/Redirect/Get
+   - Post 이후에 브라우저를 refresh 하더라도 Form Submit이 발생하지 않도록 하는 패턴
+
+4. Thymleaf 목록 보여주기
+
+   - https://www.thymeleaf.org/doc/tutorials/2.1/thymeleafspring.html#listing-seed-starter-data
+
+   ```html
+   <a th:href="@{/events/form}">Create New Event</a>
+   <div th:unless="${#lists.isEmpty(eventList)}">
+     <ul th:each="event:${eventList}">
+       <p th:text="${event.Name}">
+         Event Name
+       </p>
+     </ul>
+   </div>
+   ```
+
+   
+
+### 16. Handler Method 8부: @SessionAttributes
+
+1. Model 정보를 HTTP Session에 저장해주는 어노테이션
+   - HttpSession을 직접 사용할 수도 있지만
+   - 이 어노테이션에 설정한 이름에 해당하는 Model 정보를 자동으로 Session에 넣어준다.
+   - @ModelAttribute는 Session에 있는 Data도 바인딩한다.
+   - 여러 화면(또는 요청)에서 사용해야 하는 객체를 공유할 때 사용한다.
+2. SessionStatus를 사용해서 세션 처리 완료를 알려줄 수 있다.
+   - Form 처리 끝나고 Session 비울 때 사용한다.
+
+
+
+### 17. Handler Method 9부: Multi Form Submit
+
+1. Session을 사용해서 여러 Form에 걸쳐 Data를 나눠 입력 받고 저장하기
+   - 이벤트 이름 입력받고
+   - 이벤트 제한 인원 입력받고
+   - 위의 내용을 묶어 이벤트 목록으로 Submit 
+2. 완료된 경우에 Session에서 Model 객체 제거하기
+   - SessionStatus
+
+
+
+### 18. Handler Method 10부: @SessionAttribute
+
+1. HTTP Session에 들어있는 값 참조할 때 사용
+   - HttpSession을 사용할 때 비해 타입 컨버젼을 자동으로 지원하기 떄문에 조금 편리함
+   - HTTP Session에 데이터를 넣고 빼고 싶은 경우에는 HttpSession을 사용할 것.
+2. @SessionAttributes와는 다르다.
+   - @SessionAttributes는 해당 컨트롤러 내에서만 동작, 즉, 해당 컨트롤러 안에서 다루는 특정 model 객체를 Session에 넣고 공유할 때 사용
+   - **@SessionAttribute는 컨트롤러 밖(interceptor 또는 filter 등)에서 만들어 준 Session 데이터에 접근할 때 사용한다.**
+
+
+
+### 19.  Handler Method 11부: RedirectAttributes
+
+1. Redirect할 때 기본적으로 Model에 들어있는 primitive type 데이터는 URI 쿼리 매개변수에 추가된다.
+   - Spring Boot에서는 이 기능이 기본적으로 비활성화 되어 있다.
+   - Ignore-default-model-on-redirect 프로퍼티를 사용해서 활성화 할 수 있다.
+2. 원하는 값만 Redirect할 때 전달하고 싶으면 RedirectAttributes에 명시적으로 추가할 수 있다.
+3. Redirect 요청을 처리하는 곳에서 query arguments를 @RequestParam 또는 @ModelAttribute로 받을 수 있다.
+
+
+
+### 20. Handler Method 12부: Flash Attributes
+
+ 
